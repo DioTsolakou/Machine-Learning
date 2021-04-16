@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import pandas as pd
 
 # globals for now
 w1 = []  # Mx(D+1) matrix, j line has vector wj
@@ -56,3 +57,47 @@ def activation_func(a):
         return (math.exp(a) - math.exp(-a)) / math.exp(a) + math.exp(-a)
     else:
         return math.cos(a)
+
+
+def load_data():
+    """
+    Load the MNIST dataset. Reads the training and testing files and create matrices.
+    :Expected return:
+    train_data:the matrix with the training data
+    test_data: the matrix with the data that will be used for testing
+    y_train: the matrix consisting of one
+                        hot vectors on each row(ground truth for training)
+    y_test: the matrix consisting of one
+                        hot vectors on each row(ground truth for testing)
+    """
+
+    # load the train files
+    train_data, y_train = load_file("train")
+
+    # load test files
+    test_data, y_test = load_file("test")
+
+    return train_data, test_data, y_train, y_test
+
+
+def load_file(file):
+    array = []
+    df = None
+    
+    for i in range(10):
+        tmp = pd.read_csv('data/mnist/%s%d.txt' % file % i, header=None, sep=" ")
+        # build labels - one hot vector
+        hot_vector = [1 if j == i else 0 for j in range(0, 10)]
+
+        for j in range(tmp.shape[0]):
+            array.append(hot_vector)
+        # concatenate dataframes by rows
+        if i == 0:
+            df = tmp
+        else:
+            df = pd.concat([df, tmp])
+
+    data = df.to_numpy()
+    array = np.array(array)
+    
+    return data, array
