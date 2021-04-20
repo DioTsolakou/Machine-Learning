@@ -13,6 +13,8 @@ def stochastic_gradient_ascent():
     print("Choose activation function.\n 0 for log, 1 for exp, 2 for cos.\n")
     global pick
     pick = input()
+    #w1 = weight_init()
+    #w2 = weight_init()
     #cost(w, K, N, lamda)  # to be determined later
 
 
