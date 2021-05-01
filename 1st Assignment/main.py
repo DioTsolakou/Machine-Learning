@@ -14,16 +14,16 @@ def stochastic_gradient_ascent(train_data, t, lamda):
     global pick
     pick = input()
 
-    w = weight_norm()
+    w = weight_norm(train_data)
 
-    E, gradEw = cost(w, train_data, t, lamda)  # to be determined later
+    E, gradEw = cost(w, train_data, t, lamda)
 
     plot_results()
 
 
-def weight_norm():
-    w1 = weight_init()
-    w2 = weight_init()
+def weight_norm(X):
+    w1 = weight_init(X.shape, )
+    w2 = weight_init(X.shape, )
 
     w1 = np.sum(np.square(w1), axis=0), np.sum(np.square(w1), axis=1)
     w2 = np.sum(np.square(w2), axis=0), np.sum(np.square(w2), axis=1)
@@ -31,32 +31,27 @@ def weight_norm():
 
     return w
 
-def gradcheck():   # function to check partial derivative
-    pass
-
 
 def cost(w, X, t, lamda):
     cost_of_w = 0
     N, D = X.shape
     K = t.shape[1]
 
-    #y = softmax()
+    y = softmax(np.dot(X, w.T))
 
     for n in range(N):
         for k in range(K):
-            cost_of_w += (t[n][k] * np.log(y(K, k, n))) - (lamda/2) * np.power(w, 2)
+            cost_of_w += (t[n][k] * np.log(y)) - (lamda/2) * np.power(w, 2)
 
-    #gradEw = np.dot((t - y).T, X) - lamda * w
+    gradEw = np.dot((t - y).T, X) - lamda * w
 
-    return cost_of_w
+    return cost_of_w, gradEw
 
 
-def y(K, index_k, index_n):
-    denominator = 0
-    for i in range(K):
-        denominator += np.exp(np.transpose(w2[i]) * z(index_n, 0))  # j is 0 for now
-
-    return np.exp(np.transpose(w2[index_k]) * z(index_n, 0)) / denominator  # j is 0 for now
+def softmax(__x, ax=1):
+    m = np.max(__x, axis=ax, keepdims=True)  # max per row
+    p = np.exp(__x - m)
+    return p / np.sum(p, axis=ax, keepdims=True)
 
 
 def z(n, j):
@@ -146,7 +141,7 @@ def ml_softmax_train(t, X, lamda, w, options):
     costs = []
 
     for i in range(1, max_iter+1):
-        E = cost(w, X, t, lamda)
+        E, gradEw = cost(w, X, t, lamda)
         costs.append(E)
         if i % 50 == 0:
             print('Iteration : %d, Cost function :%f' % (i, E))
@@ -158,6 +153,74 @@ def ml_softmax_train(t, X, lamda, w, options):
         Ewold = E
 
     return w, costs
+
+
+def gradcheck_softmax(Winit, X, t, lamda):
+    W = np.random.rand(*Winit.shape)
+    epsilon = 1e-6
+
+    _list = np.random.randint(X.shape[0], size=5)
+    x_sample = np.array(X[_list, :])
+    t_sample = np.array(t[_list, :])
+
+    E, gradEw = cost(W, x_sample, t_sample, lamda)
+
+    print("gradEw shape: ", gradEw.shape)
+
+    numericalGrad = np.zeros(gradEw.shape)
+    # Compute all numerical gradient estimates and store them in
+    # the matrix numericalGrad
+    for k in range(numericalGrad.shape[0]):
+        for d in range(numericalGrad.shape[1]):
+            # add epsilon to the w[k,d]
+            w_tmp = np.copy(W)
+            w_tmp[k, d] += epsilon
+            e_plus, _ = cost(w_tmp, x_sample, t_sample, lamda)
+
+            # subtract epsilon to the w[k,d]
+            w_tmp = np.copy(W)
+            w_tmp[k, d] -= epsilon
+            e_minus, _ = cost(w_tmp, x_sample, t_sample, lamda)
+
+            # approximate gradient ( E[ w[k,d] + theta ] - E[ w[k,d] - theta ] ) / 2*e
+            numericalGrad[k, d] = (e_plus - e_minus) / (2 * epsilon)
+
+    return gradEw, numericalGrad
+
+
+def grad_difference(X, t):
+    N, D = X.shape
+    K = 10
+    Winit = np.zeros((K, D))
+    lamda = 0.1
+    options = [500, 1e-6, 0.5/N]
+
+    gradEw, numericalGrad = gradcheck_softmax(Winit, X, t, lamda)
+
+    print("The difference estimate for the gradient of w is : ", np.max(np.abs(gradEw - numericalGrad)))
+
+
+def training(X, t):
+    N, D = X.shape
+    K = 10
+    Winit = np.zeros((K, D))
+    lamda = 0.1
+    options = [500, 1e-6, 0.5/N]
+
+    w, costs = ml_softmax_train(t, X, lamda, Winit, options)
+    return costs, options
+
+
+def ml_softmax_test(W, X_test):
+    ytest = softmax(X_test.dot(W.T))
+    # Hard classification decisions
+    ttest = np.argmax(ytest, 1)
+    return ttest
+
+
+def accuracy(W, X_test, y_test):
+    pred = ml_softmax_test(W, X_test)
+    print(np.mean(pred == np.argmax(y_test, 1)))
 
 
 def plot_results(costs, options):
@@ -172,6 +235,9 @@ def main():
     train_data, test_data, y_train, y_test = load_data()
     view_dataset(train_data)
     stochastic_gradient_ascent(train_data, y_train, 0.1)
+    costs, options = training(train_data, y_train)
+    plot_results(costs, options)
+    accuracy(W, test_data, y_test)
 
 
 if __name__ == "__main__":
