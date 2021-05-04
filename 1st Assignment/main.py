@@ -9,21 +9,21 @@ x = []  # input data of (D+1)-dimensions
 pick = 0
 
 
-def stochastic_gradient_ascent(train_data, t, lamda):
+def stochastic_gradient_ascent(train_data, t):
     print("Choose activation function.\n 0 for log, 1 for exp, 2 for cos.\n")
     global pick
     pick = input()
+    print("Choose hidden unit size")
+    hidden_size = input()
 
-    w = weight_norm(train_data)
-
-    E, gradEw = cost(w, train_data, t, lamda)
-
-    plot_results()
+    w = weight_norm(train_data, hidden_size, t)
 
 
-def weight_norm(X):
-    w1 = weight_init(X.shape, )
-    w2 = weight_init(X.shape, )
+def weight_norm(X, hidden, t):
+    w1_size = (hidden, X.shape+1)
+    w2_size = (t.shape[1], hidden+1)
+    w1 = weight_init(X.shape, hidden, w1_size)
+    w2 = weight_init(X.shape, hidden, w2_size)
 
     w1 = np.sum(np.square(w1), axis=0), np.sum(np.square(w1), axis=1)
     w2 = np.sum(np.square(w2), axis=0), np.sum(np.square(w2), axis=1)
@@ -67,8 +67,8 @@ def activation_func(a):
         return np.cos(a)
 
 
-def weight_init(f_in, f_out):
-    return np.random.uniform(-np.sqrt(6/(f_in + f_out)), np.sqrt(6/(f_in + f_out)))
+def weight_init(f_in, f_out, shape):
+    return np.random.uniform(-np.sqrt(6/(f_in + f_out)), np.sqrt(6/(f_in + f_out)), shape)
 
 
 def load_data():
@@ -190,7 +190,7 @@ def gradcheck_softmax(Winit, X, t, lamda):
 
 def grad_difference(X, t):
     N, D = X.shape
-    K = 10
+    K = t.shape[1]
     Winit = np.zeros((K, D))
     lamda = 0.1
     options = [500, 1e-6, 0.5/N]
@@ -202,13 +202,13 @@ def grad_difference(X, t):
 
 def training(X, t):
     N, D = X.shape
-    K = 10
+    K = t.shape[1]
     Winit = np.zeros((K, D))
     lamda = 0.1
     options = [500, 1e-6, 0.5/N]
 
     w, costs = ml_softmax_train(t, X, lamda, Winit, options)
-    return costs, options
+    return costs, options, w
 
 
 def ml_softmax_test(W, X_test):
@@ -234,10 +234,10 @@ def plot_results(costs, options):
 def main():
     train_data, test_data, y_train, y_test = load_data()
     view_dataset(train_data)
-    stochastic_gradient_ascent(train_data, y_train, 0.1)
-    costs, options = training(train_data, y_train)
+    stochastic_gradient_ascent(train_data, y_train)
+    costs, options, w = training(train_data, y_train)
     plot_results(costs, options)
-    accuracy(W, test_data, y_test)
+    accuracy(w, test_data, y_test)
 
 
 if __name__ == "__main__":
