@@ -20,8 +20,8 @@ def stochastic_gradient_ascent(train_data, t):
 
 
 def weight_norm(X, hidden, t):
-    w1_size = (hidden, X.shape+1)
-    w2_size = (t.shape[1], hidden+1)
+    w1_size = (hidden, X.shape[1])
+    w2_size = (t.shape[1], hidden)
     w1 = weight_init(X.shape, hidden, w1_size)
     w2 = weight_init(X.shape, hidden, w2_size)
 
