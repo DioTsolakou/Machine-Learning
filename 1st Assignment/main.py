@@ -20,14 +20,23 @@ def stochastic_gradient_ascent(train_data, t):
 
 
 def weight_norm(X, hidden, t):
-    w1_size = (hidden, X.shape[1])
-    w2_size = (t.shape[1], hidden)
-    w1 = weight_init(X.shape, hidden, w1_size)
-    w2 = weight_init(X.shape, hidden, w2_size)
+    hidden = int(hidden)
+    w1_size = (hidden, X.shape[1]+1)
+    w2_size = (t.shape[1], hidden+1)
 
-    w1 = np.sum(np.square(w1), axis=0), np.sum(np.square(w1), axis=1)
-    w2 = np.sum(np.square(w2), axis=0), np.sum(np.square(w2), axis=1)
-    w = np.sum(w1, w2)
+    print(w1_size)
+    print(w2_size)
+
+    w1 = weight_init(X.shape[1], hidden+1, w1_size)
+    w2 = weight_init(X.shape[1], hidden+1, w2_size)
+
+    w1 = np.sum(np.square(w1), axis=1, keepdims=True) #, np.sum(np.square(w1), axis=1)
+    w2 = np.sum(np.square(w2), axis=1, keepdims=True) #, np.sum(np.square(w2), axis=1)
+
+    w1 = np.array(w1)
+    w2 = np.array(w2)
+
+    w = np.sum((w1, w2), keepdims=True)
 
     return w
 
@@ -233,6 +242,23 @@ def plot_results(costs, options):
 
 def main():
     train_data, test_data, y_train, y_test = load_data()
+
+
+    #print("train_data: ")
+    #print(train_data.shape)
+    #print("\n")
+
+    #print("test_data: ")
+    #print(test_data.shape)
+    #print("\n")
+
+    #print("y_train: ")
+    #print(y_train.shape)
+    #print("\n")
+
+    #print("y_test: ")
+    #print(y_test.shape)
+
     view_dataset(train_data)
     stochastic_gradient_ascent(train_data, y_train)
     costs, options, w = training(train_data, y_train)
