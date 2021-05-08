@@ -8,6 +8,35 @@ w2 = []  # Kx(M+1) matrix, k line has vector wk
 x = []  # input data of (D+1)-dimensions
 pick = 0
 
+def weight_norm(X, hidden, t):
+    hidden = int(hidden)
+    w1_size = (hidden, X.shape[1]+1)
+    w2_size = (t.shape[1], hidden+1)
+
+    w1 = weight_init(X.shape[1], hidden+1, w1_size)
+    w2 = weight_init(X.shape[1], hidden+1, w2_size)
+
+    print(w1.shape)
+    print(w2.shape)
+
+    w1 = np.sum(np.square(w1), axis=0, keepdims=True)
+    w1 = np.sum(w1, axis=1, keepdims=True)
+    w2 = np.sum(np.square(w2), axis=0, keepdims=True)
+    w2 = np.sum(w2, axis=1, keepdims=True)
+
+    #w1 = np.array(w1)
+    #w2 = np.array(w2)
+
+    print(w1.shape)
+    print(w1)
+    print(w2.shape)
+    print(w2)
+
+    w = w1 + w2 #np.sum(w1, w2)
+    print(w)
+
+    return w
+
 
 def stochastic_gradient_ascent(train_data, t):
     print("Choose activation function.\n 0 for log, 1 for exp, 2 for cos.\n")
@@ -19,26 +48,10 @@ def stochastic_gradient_ascent(train_data, t):
     w = weight_norm(train_data, hidden_size, t)
 
 
-def weight_norm(X, hidden, t):
-    hidden = int(hidden)
-    w1_size = (hidden, X.shape[1]+1)
-    w2_size = (t.shape[1], hidden+1)
-
-    print(w1_size)
-    print(w2_size)
-
-    w1 = weight_init(X.shape[1], hidden+1, w1_size)
-    w2 = weight_init(X.shape[1], hidden+1, w2_size)
-
-    w1 = np.sum(np.square(w1), axis=1, keepdims=True) #, np.sum(np.square(w1), axis=1)
-    w2 = np.sum(np.square(w2), axis=1, keepdims=True) #, np.sum(np.square(w2), axis=1)
-
-    w1 = np.array(w1)
-    w2 = np.array(w2)
-
-    w = np.sum((w1, w2), keepdims=True)
-
-    return w
+def softmax(__x, ax=1):
+    m = np.max(__x, axis=ax, keepdims=True)  # max per row
+    p = np.exp(__x - m)
+    return p / np.sum(p, axis=ax, keepdims=True)
 
 
 def cost(w, X, t, lamda):
@@ -48,19 +61,19 @@ def cost(w, X, t, lamda):
 
     y = softmax(np.dot(X, w.T))
 
+    print(y)
+
     for n in range(N):
         for k in range(K):
-            cost_of_w += (t[n][k] * np.log(y)) - (lamda/2) * np.power(w, 2)
+            cost_of_w += (t[n][k] * np.log(y[n][k]))
+    cost_of_w -= (lamda/2) * np.sum(np.power(w, 2))
 
     gradEw = np.dot((t - y).T, X) - lamda * w
 
+    #print(cost_of_w)
+    #print(gradEw)
+
     return cost_of_w, gradEw
-
-
-def softmax(__x, ax=1):
-    m = np.max(__x, axis=ax, keepdims=True)  # max per row
-    p = np.exp(__x - m)
-    return p / np.sum(p, axis=ax, keepdims=True)
 
 
 def z(n, j):
@@ -152,7 +165,7 @@ def ml_softmax_train(t, X, lamda, w, options):
     for i in range(1, max_iter+1):
         E, gradEw = cost(w, X, t, lamda)
         costs.append(E)
-        if i % 50 == 0:
+        if i % 10 == 0:
             print('Iteration : %d, Cost function :%f' % (i, E))
 
         if np.abs(E - Ewold) < tol:
@@ -237,12 +250,12 @@ def plot_results(costs, options):
     plt.ylabel('cost')
     plt.xlabel('iterations (per tens)')
     plt.title("Learning rate =" + str(format(options[2], 'f')))
+    plt.interactive(False)
     plt.show()
 
 
 def main():
     train_data, test_data, y_train, y_test = load_data()
-
 
     #print("train_data: ")
     #print(train_data.shape)
@@ -259,7 +272,7 @@ def main():
     #print("y_test: ")
     #print(y_test.shape)
 
-    view_dataset(train_data)
+    #view_dataset(train_data)
     stochastic_gradient_ascent(train_data, y_train)
     costs, options, w = training(train_data, y_train)
     plot_results(costs, options)
