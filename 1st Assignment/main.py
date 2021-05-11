@@ -8,6 +8,7 @@ w2 = []  # Kx(M+1) matrix, k line has vector wk
 x = []  # input data of (D+1)-dimensions
 pick = 0
 
+
 def weight_norm(X, hidden, t):
     hidden = int(hidden)
     w1_size = (hidden, X.shape[1]+1)
@@ -16,29 +17,32 @@ def weight_norm(X, hidden, t):
     w1 = weight_init(X.shape[1], hidden+1, w1_size)
     w2 = weight_init(X.shape[1], hidden+1, w2_size)
 
-    print(w1.shape)
-    print(w2.shape)
+    w1_n = w1
+    w2_n = w2
 
-    w1 = np.sum(np.square(w1), axis=0, keepdims=True)
-    w1 = np.sum(w1, axis=1, keepdims=True)
-    w2 = np.sum(np.square(w2), axis=0, keepdims=True)
-    w2 = np.sum(w2, axis=1, keepdims=True)
+    w1_n = np.sum(np.square(w1_n), axis=0, keepdims=True)
+    w1_n = np.sum(w1_n, axis=1, keepdims=True)
+    w2_n = np.sum(np.square(w2_n), axis=0, keepdims=True)
+    w2_n = np.sum(w2_n, axis=1, keepdims=True)
 
-    #w1 = np.array(w1)
-    #w2 = np.array(w2)
+    w1_n = np.array(w1_n)
+    w2_n = np.array(w2_n)
 
-    print(w1.shape)
-    print(w1)
-    print(w2.shape)
-    print(w2)
+    #print("w1_n values")
+    #print(w1_n.shape)
+    #print(w1_n)
+    #print("w2_n values")
+    #print(w2_n.shape)
+    #print(w2_n)
 
-    w = w1 + w2 #np.sum(w1, w2)
-    print(w)
+    w = w1_n + w2_n #np.sum(w1, w2)
+    #print("w values")
+    #print(w)
 
     return w
 
 
-def stochastic_gradient_ascent(train_data, t):
+def initialize(train_data, t):
     print("Choose activation function.\n 0 for log, 1 for exp, 2 for cos.\n")
     global pick
     pick = input()
@@ -46,6 +50,7 @@ def stochastic_gradient_ascent(train_data, t):
     hidden_size = input()
 
     w = weight_norm(train_data, hidden_size, t)
+    return w
 
 
 def softmax(__x, ax=1):
@@ -59,9 +64,9 @@ def cost(w, X, t, lamda):
     N, D = X.shape
     K = t.shape[1]
 
-    y = softmax(np.dot(X, w.T))
+    winit = 0.5 * np.ones((K, D))
 
-    print(y)
+    y = softmax(np.dot(X, winit.T))
 
     for n in range(N):
         for k in range(K):
@@ -76,10 +81,6 @@ def cost(w, X, t, lamda):
     return cost_of_w, gradEw
 
 
-def z(n, j):
-    return activation_func(np.transpose(w1[j]) * x[n])
-
-
 def activation_func(a):
     if pick == 0:
         return np.log(1 + np.exp(a))
@@ -89,28 +90,12 @@ def activation_func(a):
         return np.cos(a)
 
 
+def z(n, j):
+    return activation_func(np.transpose(w1[j]) * x[n])
+
+
 def weight_init(f_in, f_out, shape):
     return np.random.uniform(-np.sqrt(6/(f_in + f_out)), np.sqrt(6/(f_in + f_out)), shape)
-
-
-def load_data():
-    """
-    Load the MNIST dataset. Reads the training and testing files and create matrices.
-    :Expected return:
-    train_data:the matrix with the training data
-    test_data: the matrix with the data that will be used for testing
-    y_train: the matrix consisting of one
-                        hot vectors on each row(ground truth for training)
-    y_test: the matrix consisting of one
-                        hot vectors on each row(ground truth for testing)
-    """
-    # load the train files
-    train_data, y_train = load_file("train")
-
-    # load test files
-    test_data, y_test = load_file("test")
-
-    return train_data, test_data, y_train, y_test
 
 
 def load_file(file):
@@ -137,6 +122,26 @@ def load_file(file):
     return data, array
 
 
+def load_data():
+    """
+    Load the MNIST dataset. Reads the training and testing files and create matrices.
+    :Expected return:
+    train_data:the matrix with the training data
+    test_data: the matrix with the data that will be used for testing
+    y_train: the matrix consisting of one
+                        hot vectors on each row(ground truth for training)
+    y_test: the matrix consisting of one
+                        hot vectors on each row(ground truth for testing)
+    """
+    # load the train files
+    train_data, y_train = load_file("train")
+
+    # load test files
+    test_data, y_test = load_file("test")
+
+    return train_data, test_data, y_train, y_test
+
+
 def view_dataset(train_data):
     n = 100
     sqrt_n = int(n**0.5)
@@ -154,7 +159,7 @@ def view_dataset(train_data):
     plt.show()
 
 
-def ml_softmax_train(t, X, lamda, w, options):
+def ml_softmax_train(t, X, lamda, w, options, w_init):
     max_iter = options[0]
     tol = options[1]
     lr = options[2]
@@ -171,7 +176,7 @@ def ml_softmax_train(t, X, lamda, w, options):
         if np.abs(E - Ewold) < tol:
             break
 
-        w = w + lr * gradEw
+        w_init = w_init + lr * gradEw
         Ewold = E
 
     return w, costs
@@ -210,26 +215,26 @@ def gradcheck_softmax(Winit, X, t, lamda):
     return gradEw, numericalGrad
 
 
-def grad_difference(X, t):
+def grad_difference(X, t, Winit):
     N, D = X.shape
     K = t.shape[1]
-    Winit = np.zeros((K, D))
     lamda = 0.1
-    options = [500, 1e-6, 0.5/N]
+    options = [500, 1e-6, 0.05]
 
     gradEw, numericalGrad = gradcheck_softmax(Winit, X, t, lamda)
 
     print("The difference estimate for the gradient of w is : ", np.max(np.abs(gradEw - numericalGrad)))
 
 
-def training(X, t):
+def training(X, t, W):
     N, D = X.shape
     K = t.shape[1]
-    Winit = np.zeros((K, D))
     lamda = 0.1
-    options = [500, 1e-6, 0.5/N]
+    options = [500, 1e-6, 0.005]
 
-    w, costs = ml_softmax_train(t, X, lamda, Winit, options)
+    w_init = np.zeros((K, D))
+
+    w, costs = ml_softmax_train(t, X, lamda, W, options, w_init)
     return costs, options, w
 
 
@@ -240,16 +245,19 @@ def ml_softmax_test(W, X_test):
     return ttest
 
 
-def accuracy(W, X_test, y_test):
-    pred = ml_softmax_test(W, X_test)
-    print(np.mean(pred == np.argmax(y_test, 1)))
+def accuracy(X_test, y_test, X, t):
+    N, D = X.shape
+    K = t.shape[1]
+    w_init = np.zeros((K, D))
+    pred = ml_softmax_test(w_init, X_test)
+    print("Accuracy : ", np.mean(pred == np.argmax(y_test, 1)))
 
 
 def plot_results(costs, options):
     plt.plot(np.squeeze(costs))
     plt.ylabel('cost')
     plt.xlabel('iterations (per tens)')
-    plt.title("Learning rate =" + str(format(options[2], 'f')))
+    plt.title("Learning rate = " + str(format(options[2], 'f')))
     plt.interactive(False)
     plt.show()
 
@@ -273,10 +281,10 @@ def main():
     #print(y_test.shape)
 
     #view_dataset(train_data)
-    stochastic_gradient_ascent(train_data, y_train)
-    costs, options, w = training(train_data, y_train)
+    w = initialize(train_data, y_train)
+    costs, options, w = training(train_data, y_train, w)
     plot_results(costs, options)
-    accuracy(w, test_data, y_test)
+    accuracy(test_data, y_test, train_data, y_train)
 
 
 if __name__ == "__main__":
