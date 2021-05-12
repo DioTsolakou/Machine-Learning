@@ -14,7 +14,9 @@ def weight_norm(X, hidden, t):
     w1_size = (hidden, X.shape[1]+1)
     w2_size = (t.shape[1], hidden+1)
 
+    global w1
     w1 = weight_init(X.shape[1], hidden+1, w1_size)
+    global w2
     w2 = weight_init(X.shape[1], hidden+1, w2_size)
 
     w1_n = w1
@@ -88,6 +90,15 @@ def activation_func(a):
         return (np.exp(a) - np.exp(-a)) / np.exp(a) + np.exp(-a)
     else:
         return np.cos(a)
+
+
+def activation_func_prime(a):
+    if pick == 0:
+        return np.exp(a) / (1 + np.exp(a))
+    elif pick == 1:
+        return 1 - np.square(np.tanh(a))
+    else:
+        return -np.sin(a)
 
 
 def z(n, j):
@@ -215,15 +226,19 @@ def gradcheck_softmax(Winit, X, t, lamda):
     return gradEw, numericalGrad
 
 
-def grad_difference(X, t, Winit):
+def grad_difference(X, t, array_name):
     N, D = X.shape
     K = t.shape[1]
     lamda = 0.1
     options = [500, 1e-6, 0.05]
 
-    gradEw, numericalGrad = gradcheck_softmax(Winit, X, t, lamda)
+    w = np.zeros((K, D))
 
-    print("The difference estimate for the gradient of w is : ", np.max(np.abs(gradEw - numericalGrad)))
+    gradEw1, numericalGrad1 = gradcheck_softmax(w1, X, t, lamda)
+    gradEw2, numericalGrad2 = gradcheck_softmax(w2, X, t, lamda)
+
+    print("The difference estimate for the gradient of w1 is : ", np.max(np.abs(gradEw1 - numericalGrad1)))
+    print("The difference estimate for the gradient of w2 is : ", np.max(np.abs(gradEw2 - numericalGrad2)))
 
 
 def training(X, t, W):
@@ -285,6 +300,7 @@ def main():
     costs, options, w = training(train_data, y_train, w)
     plot_results(costs, options)
     accuracy(test_data, y_test, train_data, y_train)
+    grad_difference(train_data, y_train, w)
 
 
 if __name__ == "__main__":
