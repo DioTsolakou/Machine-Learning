@@ -12,7 +12,7 @@ pick = 0
 def weight_norm(X, hidden, t):
     hidden = int(hidden)
     w1_size = (hidden, X.shape[1])
-    w2_size = (t.shape[1], hidden)
+    w2_size = (t.shape[1], hidden + 1)
 
     global w1
     w1 = weight_init(X.shape[1], hidden+1, w1_size)
@@ -78,27 +78,35 @@ def cost(w_norm, w1, w2, X, t, lamda, batch_size):
     N = batch_size
     K = t.shape[1]
 
-    batches = create_batch(X, t, batch_size)
+    np.random.shuffle(X)
+    Z = activation_func(np.dot(X, w1.T))
+    y = softmax(np.dot(Z, w2[:, :-1].T))
 
-    y = softmax(np.dot(X, w1.T))
+    #print("z shape : ", Z.shape)
+    #print("y shape : ", y.shape)
+    #print("x shape : ", X.shape)
+    #print("w1 shape : ", w1.shape)
+    #print("w1.T shape : ", w1.T.shape)
+    #print("w2.T shape : ", w2.T.shape)
+    #print("t shape : ", t.shape)
 
     for n in range(N):
         for k in range(K):
             cost_of_w += (t[n][k] * np.log(y[n][k]))
     cost_of_w -= (lamda/2) * np.power(w_norm, 2)
 
-    gradEw1 = np.dot((t - y).T, X) - lamda * w1
-    gradEw2 = np.dot((t - y).T, X) - lamda * w2
+    #gradEw1 = np.dot(np.dot((t - y), activation_func_prime(np.dot(X, w1.T)) * w2[:, :-1]).T, X) - lamda * w1
+    gradEw2 = np.dot((t - y).T, Z) - lamda * w2[:, :-1]
 
     #print(cost_of_w)
     #print(gradEw)
 
-    return cost_of_w, gradEw1, gradEw2
+    return cost_of_w, gradEw2 #gradEw1, gradEw2
 
 
 def activation_func(a):
     if pick == 0:
-        return np.log(1 + np.exp(a))
+        return np.log(1 + np.exp(np.abs(a)))
     elif pick == 1:
         return (np.exp(a) - np.exp(-a)) / np.exp(a) + np.exp(-a)
     else:
@@ -112,10 +120,6 @@ def activation_func_prime(a):
         return 1 - np.square(np.tanh(a))
     else:
         return -np.sin(a)
-
-
-def z(n, j):
-    return activation_func(np.transpose(w1[j]) * x[n])
 
 
 def weight_init(f_in, f_out, shape):
@@ -200,8 +204,8 @@ def ml_softmax_train(t, X, lamda, options, w1, w2, w_norm, batch_size):
         if np.abs(E - Ewold) < tol:
             break
 
-        w1 = w1 + lr * gradEw
-        w2 = w2 + lr * gradEw
+        #w1 = w1 + lr * gradEw1
+        w2[:, :-1] = w2[:, :-1] + lr * gradEw
         Ewold = E
 
     return w1, w2, costs
@@ -292,32 +296,11 @@ def plot_results(costs, options):
 def main():
     train_data, test_data, y_train, y_test = load_data()
 
-    print("X_train before norm ", train_data.shape)
-
     train_data = train_data.astype(float)/255
     test_data = test_data.astype(float)/255
 
-    print("after norm ", train_data.shape)
-
     train_data = np.hstack((np.ones((train_data.shape[0], 1)), train_data))
     test_data = np.hstack((np.ones((test_data.shape[0], 1)), test_data))
-
-    print("after ones ", train_data.shape)
-
-    #print("train_data: ")
-    #print(train_data.shape)
-    #print("\n")
-
-    #print("test_data: ")
-    #print(test_data.shape)
-    #print("\n")
-
-    #print("y_train: ")
-    #print(y_train.shape)
-    #print("\n")
-
-    #print("y_test: ")
-    #print(y_test.shape)
 
     #view_dataset(train_data)
     w_norm, batch_size = initialize(train_data, y_train)
