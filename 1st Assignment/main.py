@@ -16,8 +16,10 @@ def weight_norm(X, hidden, t):
 
     global w1
     w1 = weight_init(X.shape[1], hidden+1, w1_size)
+    w1 = np.array(w1)
     global w2
     w2 = weight_init(X.shape[1], hidden+1, w2_size)
+    w2 = np.array(w2)
 
     w1_n = w1
     w2_n = w2
@@ -45,7 +47,7 @@ def initialize(train_data, t):
     batch_size = input()
 
     w_norm = weight_norm(train_data, hidden_size, t)
-    return w_norm, batch_size
+    return w_norm, batch_size, hidden_size
 
 
 def softmax(__x, ax=1):
@@ -54,54 +56,85 @@ def softmax(__x, ax=1):
     return p / np.sum(p, axis=ax, keepdims=True)
 
 
-def create_batch(X, t, batch_size):
-    batches = []
-    shuffled_data = np.hstack((X, t))
-    np.random.shuffle(shuffled_data)
+def create_batches(X, t, batch_size):
+    data_x = X
+    np.random.shuffle(data_x)
+    x_batches = []
 
-    for i in range(shuffled_data.shape[0] + 1):
-        batch = shuffled_data[i * batch_size:(i+1) * batch_size, :]
-        x_batch = batch[:, :-1]
-        t_batch = batch[:, -1].reshape((-1, 1))
-        batches.append((x_batch, t_batch))
-        if shuffled_data.shape[0] % batch_size != 0:
-            batch = shuffled_data[i * batch_size:shuffled_data.shape[0]]
-            x_batch = batch[:, :-1]
-            t_batch = batch[:, -1].reshape((-1, 1))
-            batches.append((x_batch, t_batch))
+    data_t = t
+    np.random.shuffle(data_t)
+    t_batches = []
 
-    return batches
+    for i in range(int(data_x.shape[0] / batch_size)):
+        batch_x = np.array(data_x[i * batch_size:(i+1) * batch_size, :])
+        x_batches.append(batch_x)
+        batch_t = np.array(data_t[i * batch_size:(i+1) * batch_size, :])
+        t_batches.append(batch_t)
+
+    return x_batches, t_batches
 
 
-def cost(w_norm, w1, w2, X, t, lamda, batch_size):
+def cost_batch(w_norm, w1, w2, X, t, lamda, batch_size, hidden_size):
     cost_of_w = 0
     N = batch_size
     K = t.shape[1]
+    counter = 0
+
+    if counter == 0:
+        x_batches, t_batches = create_batches(X, t, batch_size)
+        counter = 1
+
+    Z = np.array(shape=(N, hidden_size))
+
+    for n in range(N):
+        for j in range(hidden_size):
+            Z[n][j] = activation_func(np.dot(x_batches[counter * n], w1[j].T))
+
+    #Z = activation_func(np.dot(x_batches[counter], w1.T))
+    y = softmax(np.dot(Z, w2[:, 1:].T))
+
+    for n in range(N):
+        for k in range(K):
+            cost_of_w += (t_batches[counter * n][k] * np.log(y[counter * n][k]))
+    cost_of_w -= (lamda/2) * np.power(w_norm, 2)
+
+    Z_prime = np.array(shape=(N, hidden_size))
+
+    for n in range(N):
+        for j in range(hidden_size):
+            Z_prime[n][j] = activation_func_prime(np.dot(x_batches[counter * n], w1[j].T))
+
+    gradEw1 = np.dot((np.dot((t - y), w2[:, 1:]) * activation_func_prime(np.dot(X, w1.T))).T, X) - lamda * w1
+    gradEw2 = np.dot((t - y).T, Z) - lamda * w2[:, 1:]
+
+    counter += 1
+
+    return cost_of_w, gradEw1, gradEw2
+
+
+def cost(w_norm, w1, w2, X, t, lamda):
+    cost_of_w = 0
+    N = X.shape[0]
+    K = t.shape[1]
 
     np.random.shuffle(X)
-    Z = activation_func(np.dot(X, w1.T))
-    y = softmax(np.dot(Z, w2[:, :-1].T))
 
-    #print("z shape : ", Z.shape)
-    #print("y shape : ", y.shape)
-    #print("x shape : ", X.shape)
-    #print("w1 shape : ", w1.shape)
-    #print("w1.T shape : ", w1.T.shape)
-    #print("w2.T shape : ", w2.T.shape)
-    #print("t shape : ", t.shape)
+    Z = activation_func(np.dot(X, w1.T))  # (6000, 785) * (100, 785).T = (6000, 100)
+    y = softmax(np.dot(Z, w2[:, 1:].T))
+
+    max_error = np.max(np.dot(X, w1.T), axis=1)
 
     for n in range(N):
         for k in range(K):
             cost_of_w += (t[n][k] * np.log(y[n][k]))
     cost_of_w -= (lamda/2) * np.power(w_norm, 2)
 
-    #gradEw1 = np.dot(np.dot((t - y), activation_func_prime(np.dot(X, w1.T)) * w2[:, :-1]).T, X) - lamda * w1
-    gradEw2 = np.dot((t - y).T, Z) - lamda * w2[:, :-1]
+#    cost_of_w = np.sum(t * y) - np.sum(max_error) - np.sum(np.log(np.sum(np.exp(y - np.array([max_error, ] * y.shape[1]).T), 1))) - (0.5 * lamda) * np.square(w_norm)
 
-    #print(cost_of_w)
-    #print(gradEw)
+    gradEw1 = np.dot((np.dot((t - y), w2[:, 1:]) * activation_func_prime(np.dot(X, w1.T))).T, X) - lamda * w1
+    gradEw2 = np.dot((t - y).T, Z) - lamda * w2[:, 1:]
 
-    return cost_of_w, gradEw2 #gradEw1, gradEw2
+    return cost_of_w, gradEw1, gradEw2
 
 
 def activation_func(a):
@@ -187,7 +220,7 @@ def view_dataset(train_data):
     plt.show()
 
 
-def ml_softmax_train(t, X, lamda, options, w1, w2, w_norm, batch_size):
+def ml_softmax_train(t, X, lamda, options, w1, w2, w_norm, batch_size, hidden_size):
     max_iter = options[0]
     tol = options[1]
     lr = options[2]
@@ -196,7 +229,7 @@ def ml_softmax_train(t, X, lamda, options, w1, w2, w_norm, batch_size):
     costs = []
 
     for i in range(1, max_iter+1):
-        E, gradEw = cost(w_norm, w1, w2, X, t, lamda, batch_size)
+        E, gradEw1, gradEw2 = cost(w_norm, w1, w2, X, t, lamda)
         costs.append(E)
         if i % 10 == 0:
             print('Iteration : %d, Cost function :%f' % (i, E))
@@ -204,68 +237,73 @@ def ml_softmax_train(t, X, lamda, options, w1, w2, w_norm, batch_size):
         if np.abs(E - Ewold) < tol:
             break
 
-        #w1 = w1 + lr * gradEw1
-        w2[:, :-1] = w2[:, :-1] + lr * gradEw
+        w1 = w1 + lr * gradEw1
+        w2[:, 1:] = w2[:, 1:] + lr * gradEw2
         Ewold = E
 
     return w1, w2, costs
 
 
-def gradcheck_softmax(Winit, X, t, lamda):
-    W = np.random.rand(*Winit.shape)
+def gradcheck_softmax(w1, w2, X, t, lamda, w_norm):
+    W1 = np.random.rand(*w1.shape)
+    W2 = np.random.rand(*w2.shape)
     epsilon = 1e-6
 
     _list = np.random.randint(X.shape[0], size=5)
     x_sample = np.array(X[_list, :])
     t_sample = np.array(t[_list, :])
 
-    E, gradEw = cost(W, x_sample, t_sample, lamda)
+    E, gradEw1, gradEw2 = cost(w_norm, w1, w2, x_sample, t_sample, lamda)
 
-    print("gradEw shape: ", gradEw.shape)
+    print("gradEw shape: ", gradEw1.shape)
+    print("gradEw shape: ", gradEw2.shape)
 
-    numericalGrad = np.zeros(gradEw.shape)
+    numericalGrad1 = np.zeros(gradEw1.shape)
+    numericalGrad2 = np.zeros(gradEw2.shape)
     # Compute all numerical gradient estimates and store them in
     # the matrix numericalGrad
-    for k in range(numericalGrad.shape[0]):
-        for d in range(numericalGrad.shape[1]):
+    for k in range(numericalGrad1.shape[0]):
+        for d in range(numericalGrad1.shape[1]):
             # add epsilon to the w[k,d]
-            w_tmp = np.copy(W)
-            w_tmp[k, d] += epsilon
-            e_plus, _ = cost(w_tmp, x_sample, t_sample, lamda)
+            w_tmp_1 = np.copy(W1)
+            w_tmp_2 = np.copy(W2)
+            w_tmp_1[k, d] += epsilon
+            w_tmp_2[k, d] += epsilon
+            cost_of_w, e_plus1, e_plus2 = cost(w_norm, w_tmp_1, w_tmp_2, x_sample, t_sample, lamda)
 
             # subtract epsilon to the w[k,d]
-            w_tmp = np.copy(W)
-            w_tmp[k, d] -= epsilon
-            e_minus, _ = cost(w_tmp, x_sample, t_sample, lamda)
+            w_tmp_1 = np.copy(W1)
+            w_tmp_2 = np.copy(W2)
+            w_tmp_1[k, d] -= epsilon
+            w_tmp_2[k, d] -= epsilon
+            cost_of_w, e_minus1, e_minus2 = cost(w_norm, w_tmp_1, w_tmp_2, x_sample, t_sample, lamda)
 
             # approximate gradient ( E[ w[k,d] + theta ] - E[ w[k,d] - theta ] ) / 2*e
-            numericalGrad[k, d] = (e_plus - e_minus) / (2 * epsilon)
+            numericalGrad1[k, d] = (e_plus1 - e_minus1) / (2 * epsilon)
+            numericalGrad2[k, d] = (e_plus2 - e_minus2) / (2 * epsilon)
 
-    return gradEw, numericalGrad
+    return gradEw1, gradEw2, numericalGrad1, numericalGrad2
 
 
-def grad_difference(X, t, array_name):
+def grad_difference(X, t, w1, w2, w_norm):
     N, D = X.shape
     K = t.shape[1]
     lamda = 0.1
     options = [500, 1e-6, 0.05]
 
-    w = np.zeros((K, D))
-
-    gradEw1, numericalGrad1 = gradcheck_softmax(w1, X, t, lamda)
-    gradEw2, numericalGrad2 = gradcheck_softmax(w2, X, t, lamda)
+    gradEw1, gradEw2, numericalGrad1, numericalGrad2 = gradcheck_softmax(w1, w2, X, t, lamda, w_norm)
 
     print("The difference estimate for the gradient of w1 is : ", np.max(np.abs(gradEw1 - numericalGrad1)))
     print("The difference estimate for the gradient of w2 is : ", np.max(np.abs(gradEw2 - numericalGrad2)))
 
 
-def training(X, t, w1, w2, w_norm, batch_size):
+def training(X, t, w1, w2, w_norm, batch_size, hidden_size):
     N, D = X.shape
     K = t.shape[1]
     lamda = 0.1
     options = [500, 1e-6, 0.005]
 
-    w1, w2, costs = ml_softmax_train(t, X, lamda, options, w1, w2, w_norm, batch_size)
+    w1, w2, costs = ml_softmax_train(t, X, lamda, options, w1, w2, w_norm, batch_size, hidden_size)
     return costs, options, w1, w2
 
 
@@ -295,6 +333,7 @@ def plot_results(costs, options):
 
 def main():
     train_data, test_data, y_train, y_test = load_data()
+    view_dataset(train_data)
 
     train_data = train_data.astype(float)/255
     test_data = test_data.astype(float)/255
@@ -302,13 +341,14 @@ def main():
     train_data = np.hstack((np.ones((train_data.shape[0], 1)), train_data))
     test_data = np.hstack((np.ones((test_data.shape[0], 1)), test_data))
 
-    #view_dataset(train_data)
-    w_norm, batch_size = initialize(train_data, y_train)
+    w_norm, batch_size, hidden_size = initialize(train_data, y_train)
     batch_size = int(batch_size)
-    costs, options, w = training(train_data, y_train, w1, w2, w_norm, batch_size)
+    hidden_size = int(hidden_size)
+    global w1, w2
+    costs, options, w1, w2 = training(train_data, y_train, w1, w2, w_norm, batch_size, hidden_size)
     plot_results(costs, options)
     accuracy(test_data, y_test, train_data, y_train)
-    grad_difference(train_data, y_train, w)
+    grad_difference(train_data, y_train, w1, w2, w_norm)
 
 
 if __name__ == "__main__":
