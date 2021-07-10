@@ -10,7 +10,7 @@ from dateutil.relativedelta import relativedelta
 def init_params(X, k):
     probabilities = np.full(shape=k, fill_value=1/k)
     means = np.asarray(random.sample(list(X), k))
-    sigma = [np.cov(X.T) * np.identity(X.shape[1]) for _ in range(k)]
+    sigma = [np.cov(X.T) for _ in range(k)]
     #print("probs shape : ", probabilities.shape)
     #print("probs content : ", probabilities)
     #print("means shape : ", means.shape)
