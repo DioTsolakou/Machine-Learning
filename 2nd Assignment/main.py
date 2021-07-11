@@ -8,15 +8,12 @@ from dateutil.relativedelta import relativedelta
 
 
 def init_params(X, k):
-    probabilities = np.full(shape=k, fill_value=1/k)
-    means = np.asarray(random.sample(list(X), k))
-    sigma = [np.cov(X.T) for _ in range(k)]
-    #print("probs shape : ", probabilities.shape)
-    #print("probs content : ", probabilities)
-    #print("means shape : ", means.shape)
-    #print("means content : ", means)
-    #print("sigma shape : ", len(sigma))
-    #print("sigma content : ", sigma)
+    probabilities = np.full(shape=k, fill_value=1/k)  # is Kx1
+    probabilities = np.array(probabilities)
+    means = np.asarray(random.sample(list(X), k))  # is Kx3
+    means = np.array(means)
+    sigma = [np.cov(X.T) for _ in range(k)]  # is of length K
+    sigma = np.array(sigma)
     return probabilities, means, sigma
 
 
@@ -39,7 +36,8 @@ def flatten_img(file):
 
 
 def from_2d_to_3d(file, x, y, k):
-    file = np.array(file, dtype=np.uint)
+    file = np.array(file, dtype=np.uint8)
+    #file = (file * 255).astype(np.uint8)
     img_3d = file.reshape(x, y, 3)
     #print("reconstructed img shape : ", img_3d.shape)
     #print("reconstructed img content : ", img_3d)
@@ -50,30 +48,24 @@ def from_2d_to_3d(file, x, y, k):
 
 
 def get_GMM(x, pis, means, sigma, k):
-    #print("in GMM")
-    sigma = np.array([np.eye(x.shape[1]) * s for s in sigma])
-    #print("sigma shape in GMM", sigma.shape)
-    gmm = np.array([pis[i] * scipy.stats.multivariate_normal.pdf(x, mean=means[i], cov=sigma[i]) for i in range(k)])
-    gmm = gmm.T
-    #print("gmm shape", gmm.shape)
-    return gmm
+    #sigma = np.array([np.eye(x.shape[1]) * s for s in sigma])
+    gmm = np.array([pis[i] * scipy.stats.multivariate_normal.pdf(x, mean=means[i], cov=sigma[i]) for i in range(k)]).T
+    return gmm  # is X[0]xK, 379500xK
 
 
 def new_gamma(x, pis, means, sigma, k):
     gamma = get_GMM(x, pis, means, sigma, k)
-    #enumerator = np.dot(pis.T, gmm)
-    #denominator = enumerator.sum(axis=1)[:, np.newaxis]
     denom = np.sum(gamma, axis=1)
     denom = np.reshape(denom, (len(denom), 1))
     gamma = gamma / denom
-    #print("reached new gamma", gamma)
-    return gamma  # needs to be NxK
+    return gamma  # is X[0]xK, 379500xK
 
 
 def new_pis(gamma):
-    pis = np.sum(gamma, axis=0) / gamma.shape[0] # sum of gamma / size of gamma (N)
-    #print("reached new pis", pis)
-    return pis  # needs to be Kx1
+    pis = np.sum(gamma, axis=0) / gamma.shape[0]  # sum of gamma / size of gamma (N)
+    #pis = np.mean(gamma, axis=0)
+    pis = np.array(pis)
+    return pis  # is Kx1
 
 
 def new_means(x, gamma):
@@ -86,8 +78,7 @@ def new_means(x, gamma):
     means = np.array(means)
 
     #means = np.sum(np.dot(gamma, x)) / np.sum(gamma, axis=0)
-    #print("reached new means", means)
-    return means  # needs to be Kx3
+    return means  # is Kx3
 
 
 def new_sigmas(x, gamma, means):
@@ -103,18 +94,28 @@ def new_sigmas(x, gamma, means):
     return sigma  # needs to be Kx3x3
 
 
+def test_new_sigmas(x, gamma):
+    sigmas = []
+    for i in range(gamma.shape[1]):
+        gamma_w = gamma[:, [i]]
+        gamma_sum = np.sum(gamma_w)
+        sigma = np.cov(x.T, aweights=(np.divide(gamma_w, gamma_sum)).flatten(), bias=True)
+        sigmas.append(sigma)
+
+    sigmas = np.array(sigmas)
+    #print("test new sigma shape ", sigmas.shape)
+    return sigmas  # is Kx3x3
+
+
 def improved_new_sigma(x, gamma, means):
     tmp_list = []
     for i in range(gamma.shape[1]):
         tmp = x - means[i]
         tmp_list.append(tmp)
+    tmp_list = np.array(tmp_list)
 
-    #print("tmp_list content : ", tmp_list)
-
-    enumerator = np.sum(np.sum(np.sum(np.dot(gamma.T, np.square(tmp_list)), axis=1), axis=0))  #
-    #print("enum content ", enumerator)
+    enumerator = np.sum(np.sum(np.sum(np.dot(gamma.T, np.square(tmp_list)), axis=0), axis=1))
     denominator = np.sum(np.dot(means.shape[1], np.sum(gamma, axis=0)))  # must be Nx3
-    #print("denom content ", denominator)
     sigma_value = enumerator / denominator
 
     sigma = []
@@ -123,23 +124,18 @@ def improved_new_sigma(x, gamma, means):
         sigma.append(tmp)
 
     sigma = np.array(sigma)
-
-    #print("new sigma shape", sigma.shape)
-
-    return sigma
+    return sigma  # is Kx3x3
 
 
 def new_log_likelihood(x, pis, means, sigma, k):
-    gamma = get_GMM(x, pis, means, sigma, k)
-    likelihood = np.log(np.sum(gamma, axis=0))
+    gmm = get_GMM(x, pis, means, sigma, k).T
+    likelihood = np.log(np.sum(gmm, axis=0))
     log_sum = np.sum(likelihood)
-    #print("reached new log-l", log_sum)
     return log_sum
 
 
 def step_E(x, pis, means, sigma, k):
     gamma = new_gamma(x, pis, means, sigma, k)
-    #print("reached step E", gamma)
     return gamma
 
 
@@ -148,13 +144,12 @@ def step_M(x, gamma, k):
     means = new_means(x, gamma)
     #sigmas = new_sigmas(x, gamma, means)
     sigmas = improved_new_sigma(x, gamma, means)
-    #print("reached step M")
+    #sigmas = test_new_sigmas(x, gamma)
     return pis, means, sigmas
 
 
 def max_pis(pis):
     max_pi = np.argmax(pis, axis=1)
-    #print("reached labels", max_pi)
     return max_pi
 
 
@@ -162,8 +157,8 @@ def error_func(original_img, reconstructed_img):
     if original_img.shape != reconstructed_img.shape:
         return -1
 
-    original_img_norm_np = np.linalg.norm(original_img)
-    reconstructed_img_norm_np = np.linalg.norm(reconstructed_img)
+    original_img_norm_np = np.linalg.norm(original_img, axis=-1)
+    reconstructed_img_norm_np = np.linalg.norm(reconstructed_img, axis=-1)
 
     original_img_norm = np.sum(np.square(original_img), axis=0, keepdims=True)
     original_img_norm = np.sum(original_img_norm, axis=1, keepdims=True)
@@ -175,10 +170,11 @@ def error_func(original_img, reconstructed_img):
     reconstructed_img_norm = np.sqrt(reconstructed_img_norm)
     reconstructed_img_norm = np.array(reconstructed_img_norm)
 
-    #error1 = np.square(np.sum(original_img_norm) - np.sum(reconstructed_img_norm)) / original_img.shape[1]
-    error2 = np.square(original_img_norm_np - reconstructed_img_norm_np) / original_img.shape[1]
-    #print("Error1 is : ", error1)
-    print("Error is : ", error2)
+    error1 = np.square(np.sum(original_img_norm) - np.sum(reconstructed_img_norm)) / np.multiply(original_img.shape[0], original_img.shape[1])
+    error2 = np.sum(np.square(original_img_norm_np - reconstructed_img_norm_np) / np.multiply(original_img.shape[0], original_img.shape[1]))
+
+    print("Error1 is : ", error1)
+    print("Error2 is : ", error2)
 
 
 def ml_train(x, pis, means, sigma, iterations, k):
@@ -219,6 +215,9 @@ def main():
     new_image = means[max_pi]
     reconstructed_img = from_2d_to_3d(new_image, original_img.shape[0], original_img.shape[1], k)
     error_func(original_img, reconstructed_img)
+
+    print("original img content ", original_img)
+    print("reconstructed img content ", reconstructed_img)
 
 
 if __name__ == "__main__":
